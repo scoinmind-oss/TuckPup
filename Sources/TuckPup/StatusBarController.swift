@@ -76,7 +76,6 @@ final class StatusBarController: NSObject {
             button.target = self
             button.action = #selector(toggleButtonPressed(_:))
             button.sendAction(on: [.leftMouseDown, .rightMouseDown])
-            button.toolTip = "TuckPup：左键展开或收起，右键打开菜单"
         }
 
         if let separatorButton = separatorItem.button {
@@ -84,7 +83,6 @@ final class StatusBarController: NSObject {
             separatorButton.target = self
             separatorButton.action = #selector(separatorPressed(_:))
             separatorButton.sendAction(on: [.rightMouseDown])
-            separatorButton.toolTip = "TuckPup 隐藏范围分隔线"
         }
     }
 
