@@ -6,7 +6,7 @@
 
 ## 下载
 
-从 GitHub Releases 下载 `TuckPup-0.1.0.zip`，解压后把 `TuckPup.app`
+从 GitHub Releases 下载最新的 `TuckPup` 安装包，解压后把 `TuckPup.app`
 拖进“应用程序”文件夹。
 
 当前版本支持 Apple Silicon Mac，需要 macOS 13 或更高版本。应用采用本地
