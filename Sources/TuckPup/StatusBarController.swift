@@ -8,11 +8,13 @@ final class StatusBarController: NSObject {
     private let separatorItem = NSStatusBar.system.statusItem(withLength: 1)
     private let normalSeparatorLength: CGFloat = 1
     private let arrangeSeparatorLength: CGFloat = 18
+    private let collapsePadding: CGFloat = 64
 
-    private var collapsedLength: CGFloat = 2_000
+    private var collapsedLength: CGFloat = 1_792
     private var isArranging = false
     private var autoCollapseTimer: Timer?
     private var clickLocked = false
+    private lazy var contextMenu = makeContextMenu()
 
     private var isCollapsed: Bool {
         separatorItem.length > 50
@@ -73,16 +75,14 @@ final class StatusBarController: NSObject {
             button.imagePosition = .imageOnly
             button.target = self
             button.action = #selector(toggleButtonPressed(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.toolTip = "TuckPup：左键展开或收起，右键打开菜单"
+            button.sendAction(on: [.leftMouseDown, .rightMouseDown])
         }
 
         if let separatorButton = separatorItem.button {
             separatorButton.title = ""
             separatorButton.target = self
             separatorButton.action = #selector(separatorPressed(_:))
-            separatorButton.sendAction(on: [.rightMouseUp])
-            separatorButton.toolTip = "TuckPup 隐藏范围分隔线"
+            separatorButton.sendAction(on: [.rightMouseDown])
         }
     }
 
@@ -111,30 +111,47 @@ final class StatusBarController: NSObject {
 
     @objc private func screenParametersChanged() {
         let wasCollapsed = isCollapsed
-        updateCollapsedLength()
+        updateCollapsedLength(preferLiveGeometry: !wasCollapsed)
         if wasCollapsed {
             separatorItem.length = collapsedLength
         }
     }
 
-    private func updateCollapsedLength() {
+    private func updateCollapsedLength(preferLiveGeometry: Bool = true) {
         let widestScreen = NSScreen.screens.map(\.frame.width).max() ?? 1_728
-        collapsedLength = max(500, min(widestScreen * 2, 10_000))
+        let fallbackLength = min(widestScreen + collapsePadding, 10_000)
+
+        guard
+            preferLiveGeometry,
+            let window = separatorItem.button?.window,
+            let screen = window.screen
+        else {
+            collapsedLength = max(500, fallbackLength)
+            return
+        }
+
+        let distanceFromScreenLeft = window.frame.minX - screen.frame.minX
+        let requiredLength = distanceFromScreenLeft + collapsePadding
+        let screenBound = screen.frame.width + collapsePadding
+        collapsedLength = max(500, min(requiredLength, screenBound))
     }
 
     @objc private func toggleButtonPressed(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
+        guard !event.modifierFlags.contains(.command) else { return }
 
-        if event.type == .rightMouseUp {
+        if event.type == .rightMouseDown {
             showContextMenu(from: sender)
             return
         }
 
         guard !clickLocked else { return }
         clickLocked = true
-        toggle()
+        DispatchQueue.main.async { [weak self] in
+            self?.toggle()
+        }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             self?.clickLocked = false
         }
     }
@@ -156,6 +173,7 @@ final class StatusBarController: NSObject {
 
         isArranging = false
         separatorItem.button?.title = ""
+        updateCollapsedLength()
         separatorItem.length = collapsedLength
         autoCollapseTimer?.invalidate()
     }
@@ -214,43 +232,46 @@ final class StatusBarController: NSObject {
     }
 
     private func showContextMenu(from button: NSStatusBarButton) {
-        let menu = makeContextMenu()
-        menu.popUp(
+        updateContextMenu()
+        contextMenu.popUp(
             positioning: nil,
-            at: NSPoint(x: 0, y: button.bounds.maxY + 5),
+            at: NSPoint(x: 0, y: button.bounds.minY - 2),
             in: button
         )
+    }
+
+    private func updateContextMenu() {
+        guard contextMenu.items.count >= 4 else { return }
+
+        contextMenu.items[0].title = isCollapsed ? "显示隐藏图标" : "收起图标"
+
+        let arrangeItem = contextMenu.items[1]
+        arrangeItem.title = isArranging ? "完成调整" : "调整隐藏范围…"
+        arrangeItem.action = isArranging
+            ? #selector(finishArrangeMode)
+            : #selector(beginArrangeFromMenu)
+
+        contextMenu.items[3].state = Preferences.autoCollapseEnabled ? .on : .off
     }
 
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
 
-        let toggleTitle = isCollapsed ? "显示隐藏图标" : "收起图标"
         let toggleMenuItem = NSMenuItem(
-            title: toggleTitle,
+            title: "",
             action: #selector(toggleFromMenu),
             keyEquivalent: ""
         )
         toggleMenuItem.target = self
         menu.addItem(toggleMenuItem)
 
-        if isArranging {
-            let finishItem = NSMenuItem(
-                title: "完成调整",
-                action: #selector(finishArrangeMode),
-                keyEquivalent: ""
-            )
-            finishItem.target = self
-            menu.addItem(finishItem)
-        } else {
-            let arrangeItem = NSMenuItem(
-                title: "调整隐藏范围…",
-                action: #selector(beginArrangeFromMenu),
-                keyEquivalent: ""
-            )
-            arrangeItem.target = self
-            menu.addItem(arrangeItem)
-        }
+        let arrangeItem = NSMenuItem(
+            title: "",
+            action: #selector(beginArrangeFromMenu),
+            keyEquivalent: ""
+        )
+        arrangeItem.target = self
+        menu.addItem(arrangeItem)
 
         menu.addItem(.separator())
 
@@ -260,7 +281,6 @@ final class StatusBarController: NSObject {
             keyEquivalent: ""
         )
         autoItem.target = self
-        autoItem.state = Preferences.autoCollapseEnabled ? .on : .off
         menu.addItem(autoItem)
 
         let settingsItem = NSMenuItem(
