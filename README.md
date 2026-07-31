@@ -27,6 +27,8 @@ again.
 - Keep important icons permanently visible.
 - Rehide icons automatically after a configurable delay.
 - Launch automatically when you sign in to your Mac.
+- Follow the macOS language automatically, or choose English, Simplified
+  Chinese, or Japanese in Settings.
 - Native AppKit app with no account, analytics, ads, or network access.
 - No Accessibility or Screen Recording permission required.
 
@@ -104,6 +106,8 @@ TuckPup 是一款由小比熊守着的原生 macOS 菜单栏收纳工具。你�
 - 重要图标可以始终保持显示。
 - 支持按设定时间自动收起。
 - 支持登录 Mac 时自动启动。
+- 支持自动跟随 macOS 系统语言，也可在设置中手动选择 English、简体中文或
+  日本語。
 - 原生 AppKit 应用，无账户、无广告、无统计、无网络访问。
 - 不需要辅助功能或屏幕录制权限。
 
