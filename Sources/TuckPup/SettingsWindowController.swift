@@ -6,17 +6,25 @@ final class SettingsWindowController: NSWindowController {
     private let onBeginArrange: () -> Void
     private let onPreferencesChanged: () -> Void
 
+    private let titleLabel = NSTextField(labelWithString: "TuckPup")
+    private let subtitleLabel = NSTextField(wrappingLabelWithString: "")
+    private let instructionsLabel = NSTextField(wrappingLabelWithString: "")
+    private let arrangeButton = NSButton(title: "", target: nil, action: nil)
     private let autoCollapseCheckbox = NSButton(
-        checkboxWithTitle: "展开后自动收起",
+        checkboxWithTitle: "",
         target: nil,
         action: nil
     )
+    private let delayLabel = NSTextField(labelWithString: "")
     private let delayPopup = NSPopUpButton()
     private let launchAtLoginCheckbox = NSButton(
-        checkboxWithTitle: "登录 Mac 时自动启动",
+        checkboxWithTitle: "",
         target: nil,
         action: nil
     )
+    private let languageLabel = NSTextField(labelWithString: "")
+    private let languagePopup = NSPopUpButton()
+    private let shortcutLabel = NSTextField(wrappingLabelWithString: "")
 
     init(
         onBeginArrange: @escaping () -> Void,
@@ -26,17 +34,17 @@ final class SettingsWindowController: NSWindowController {
         self.onPreferencesChanged = onPreferencesChanged
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 430, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 450),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "TuckPup 设置"
         window.isReleasedWhenClosed = false
         window.center()
 
         super.init(window: window)
         configureContent()
+        applyLocalization()
         refreshControls()
     }
 
@@ -46,6 +54,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     func show() {
+        applyLocalization()
         refreshControls()
         window?.center()
         showWindow(nil)
@@ -55,39 +64,23 @@ final class SettingsWindowController: NSWindowController {
     private func configureContent() {
         guard let contentView = window?.contentView else { return }
 
-        let titleLabel = NSTextField(labelWithString: "TuckPup")
         titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
 
-        let subtitleLabel = NSTextField(
-            wrappingLabelWithString: "点击菜单栏里的比熊头像，展开或收起你选择的图标。"
-        )
         subtitleLabel.textColor = .secondaryLabelColor
 
-        let instructions = NSTextField(
-            wrappingLabelWithString: """
-            设置隐藏范围：点击下面的按钮后，按住 ⌘ 键，先把比熊头像拖到隐藏区与常显区之间，再把细分隔线紧贴头像左侧。左侧图标会被收纳，右侧图标始终显示。
-            """
-        )
-        instructions.maximumNumberOfLines = 0
+        instructionsLabel.maximumNumberOfLines = 0
 
-        let arrangeButton = NSButton(
-            title: "调整隐藏范围…",
-            target: self,
-            action: #selector(beginArrange)
-        )
+        arrangeButton.target = self
+        arrangeButton.action = #selector(beginArrange)
         arrangeButton.bezelStyle = .rounded
 
         autoCollapseCheckbox.target = self
         autoCollapseCheckbox.action = #selector(autoCollapseChanged)
 
-        delayPopup.addItems(withTitles: ["5 秒", "10 秒", "15 秒", "30 秒"])
         delayPopup.target = self
         delayPopup.action = #selector(delayChanged)
 
-        let delayRow = NSStackView(views: [
-            NSTextField(labelWithString: "自动收起等待时间"),
-            delayPopup
-        ])
+        let delayRow = NSStackView(views: [delayLabel, delayPopup])
         delayRow.orientation = .horizontal
         delayRow.alignment = .centerY
         delayRow.distribution = .fill
@@ -95,24 +88,31 @@ final class SettingsWindowController: NSWindowController {
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(launchAtLoginChanged)
 
+        languagePopup.target = self
+        languagePopup.action = #selector(languageChanged)
+        languagePopup.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
+        let languageRow = NSStackView(views: [languageLabel, languagePopup])
+        languageRow.orientation = .horizontal
+        languageRow.alignment = .centerY
+        languageRow.distribution = .fill
+
         let divider = NSBox()
         divider.boxType = .separator
 
-        let shortcutLabel = NSTextField(
-            wrappingLabelWithString: "左键：展开或收起　　右键：更多选项"
-        )
         shortcutLabel.textColor = .secondaryLabelColor
         shortcutLabel.font = .systemFont(ofSize: 12)
 
         let stack = NSStackView(views: [
             titleLabel,
             subtitleLabel,
-            instructions,
+            instructionsLabel,
             arrangeButton,
             divider,
             autoCollapseCheckbox,
             delayRow,
             launchAtLoginCheckbox,
+            languageRow,
             shortcutLabel
         ])
         stack.orientation = .vertical
@@ -126,8 +126,33 @@ final class SettingsWindowController: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -28),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
             delayRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            languageRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            languagePopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 180),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
+    }
+
+    private func applyLocalization() {
+        let strings = Localization.strings
+
+        window?.title = strings.settingsWindowTitle
+        subtitleLabel.stringValue = strings.settingsSubtitle
+        instructionsLabel.stringValue = strings.settingsInstructions
+        arrangeButton.title = strings.adjustHiddenRange
+        autoCollapseCheckbox.title = strings.autoCollapse
+        delayLabel.stringValue = strings.autoCollapseDelay
+        launchAtLoginCheckbox.title = strings.launchAtLogin
+        languageLabel.stringValue = strings.language
+        shortcutLabel.stringValue = strings.shortcutHint
+
+        delayPopup.removeAllItems()
+        delayPopup.addItems(withTitles: [5, 10, 15, 30].map(Localization.seconds))
+
+        languagePopup.removeAllItems()
+        for language in AppLanguage.allCases {
+            languagePopup.addItem(withTitle: Localization.displayName(for: language))
+            languagePopup.lastItem?.representedObject = language.rawValue
+        }
     }
 
     private func refreshControls() {
@@ -135,8 +160,11 @@ final class SettingsWindowController: NSWindowController {
         delayPopup.isEnabled = Preferences.autoCollapseEnabled
 
         let delays: [TimeInterval] = [5, 10, 15, 30]
-        let index = delays.firstIndex(of: Preferences.autoCollapseDelay) ?? 1
-        delayPopup.selectItem(at: index)
+        let delayIndex = delays.firstIndex(of: Preferences.autoCollapseDelay) ?? 1
+        delayPopup.selectItem(at: delayIndex)
+
+        let languageIndex = AppLanguage.allCases.firstIndex(of: Preferences.appLanguage) ?? 0
+        languagePopup.selectItem(at: languageIndex)
 
         if #available(macOS 13.0, *) {
             launchAtLoginCheckbox.state =
@@ -164,6 +192,20 @@ final class SettingsWindowController: NSWindowController {
         onPreferencesChanged()
     }
 
+    @objc private func languageChanged() {
+        guard
+            let rawValue = languagePopup.selectedItem?.representedObject as? String,
+            let language = AppLanguage(rawValue: rawValue)
+        else {
+            return
+        }
+
+        Preferences.appLanguage = language
+        applyLocalization()
+        refreshControls()
+        onPreferencesChanged()
+    }
+
     @objc private func launchAtLoginChanged() {
         guard #available(macOS 13.0, *) else { return }
 
@@ -178,7 +220,7 @@ final class SettingsWindowController: NSWindowController {
                 SMAppService.mainApp.status == .enabled ? .on : .off
 
             let alert = NSAlert(error: error)
-            alert.messageText = "无法修改登录启动设置"
+            alert.messageText = Localization.strings.launchAtLoginError
             alert.runModal()
         }
     }

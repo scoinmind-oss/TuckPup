@@ -42,24 +42,18 @@ final class StatusBarController: NSObject {
     }
 
     func beginArrangeMode() {
+        let strings = Localization.strings
+
         expand()
         isArranging = true
         separatorItem.length = arrangeSeparatorLength
         separatorItem.button?.title = "│"
         separatorItem.button?.font = .systemFont(ofSize: 13, weight: .semibold)
-        separatorItem.button?.toolTip = "按住 ⌘ 拖动这条分隔线"
 
         let alert = NSAlert()
-        alert.messageText = "调整隐藏范围"
-        alert.informativeText = """
-        菜单栏中已经出现一条细分隔线。请按住 ⌘ 键完成两步：
-
-        1. 把比熊头像拖到隐藏区与常显区之间。
-        2. 把细分隔线紧贴在比熊头像左侧。
-
-        分隔线左侧的图标会被收纳，头像右侧的图标始终显示。调整完后，右键比熊头像并选择“完成调整”。
-        """
-        alert.addButton(withTitle: "知道了")
+        alert.messageText = strings.arrangeTitle
+        alert.informativeText = strings.arrangeInstructions
+        alert.addButton(withTitle: strings.acknowledge)
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
     }
@@ -241,17 +235,23 @@ final class StatusBarController: NSObject {
     }
 
     private func updateContextMenu() {
-        guard contextMenu.items.count >= 4 else { return }
+        guard contextMenu.items.count >= 7 else { return }
+        let strings = Localization.strings
 
-        contextMenu.items[0].title = isCollapsed ? "显示隐藏图标" : "收起图标"
+        contextMenu.items[0].title =
+            isCollapsed ? strings.showHiddenIcons : strings.hideIcons
 
         let arrangeItem = contextMenu.items[1]
-        arrangeItem.title = isArranging ? "完成调整" : "调整隐藏范围…"
+        arrangeItem.title =
+            isArranging ? strings.finishAdjusting : strings.adjustHiddenRange
         arrangeItem.action = isArranging
             ? #selector(finishArrangeMode)
             : #selector(beginArrangeFromMenu)
 
+        contextMenu.items[3].title = strings.autoCollapse
         contextMenu.items[3].state = Preferences.autoCollapseEnabled ? .on : .off
+        contextMenu.items[4].title = strings.settings
+        contextMenu.items[6].title = strings.quit
     }
 
     private func makeContextMenu() -> NSMenu {
@@ -276,7 +276,7 @@ final class StatusBarController: NSObject {
         menu.addItem(.separator())
 
         let autoItem = NSMenuItem(
-            title: "自动收起",
+            title: "",
             action: #selector(toggleAutoCollapse),
             keyEquivalent: ""
         )
@@ -284,7 +284,7 @@ final class StatusBarController: NSObject {
         menu.addItem(autoItem)
 
         let settingsItem = NSMenuItem(
-            title: "设置…",
+            title: "",
             action: #selector(showSettings),
             keyEquivalent: ","
         )
@@ -294,7 +294,7 @@ final class StatusBarController: NSObject {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: "退出 TuckPup",
+            title: "",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -327,13 +327,12 @@ final class StatusBarController: NSObject {
     }
 
     private func presentInvalidOrderHelp() {
+        let strings = Localization.strings
         let alert = NSAlert()
-        alert.messageText = "需要重新放置分隔线"
-        alert.informativeText = """
-        按住 ⌘ 键，先把比熊头像拖到隐藏区与常显区之间，再把分隔线紧贴头像左侧。
-        """
-        alert.addButton(withTitle: "开始调整")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = strings.invalidPositionTitle
+        alert.informativeText = strings.invalidPositionInstructions
+        alert.addButton(withTitle: strings.startAdjusting)
+        alert.addButton(withTitle: strings.cancel)
         NSApp.activate(ignoringOtherApps: true)
         if alert.runModal() == .alertFirstButtonReturn {
             beginArrangeMode()

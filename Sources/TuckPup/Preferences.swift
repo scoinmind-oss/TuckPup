@@ -5,13 +5,15 @@ enum Preferences {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let autoCollapseEnabled = "autoCollapseEnabled"
         static let autoCollapseDelay = "autoCollapseDelay"
+        static let appLanguage = "appLanguage"
     }
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             Key.hasCompletedOnboarding: false,
             Key.autoCollapseEnabled: false,
-            Key.autoCollapseDelay: 10.0
+            Key.autoCollapseDelay: 10.0,
+            Key.appLanguage: AppLanguage.system.rawValue
         ])
     }
 
@@ -31,5 +33,13 @@ enum Preferences {
             return value > 0 ? value : 10
         }
         set { UserDefaults.standard.set(newValue, forKey: Key.autoCollapseDelay) }
+    }
+
+    static var appLanguage: AppLanguage {
+        get {
+            let rawValue = UserDefaults.standard.string(forKey: Key.appLanguage)
+            return AppLanguage(rawValue: rawValue ?? "") ?? .system
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Key.appLanguage) }
     }
 }
