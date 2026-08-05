@@ -9,9 +9,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Preferences.registerDefaults()
 
         let statusController = StatusBarController()
+        let layoutModel = MenuBarLayoutModel(
+            controlWindowIDs: { [weak statusController] in
+                statusController?.controlWindowIDs
+            },
+            moveNativeItem: { [weak statusController] item, category, beforeItem, completion in
+                statusController?.moveNativeItem(
+                    item,
+                    to: category,
+                    before: beforeItem,
+                    completion: completion
+                ) ?? completion(false)
+            },
+            reconcileNativeCategories: { [weak statusController] layout, completion in
+                statusController?.reconcileNativeCategories(layout, completion: completion)
+                    ?? completion(false)
+            }
+        )
         let settingsController = SettingsWindowController(
-            onBeginArrange: { [weak statusController] in
-                statusController?.beginArrangeMode()
+            layoutModel: layoutModel,
+            onPrepareLayoutEditing: { [weak statusController] in
+                statusController?.prepareForLayoutEditing()
+            },
+            onFinishLayoutEditing: { [weak statusController] in
+                statusController?.finishLayoutEditing()
             },
             onPreferencesChanged: { [weak statusController] in
                 statusController?.preferencesDidChange()
@@ -21,15 +42,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController.onShowSettings = { [weak settingsController] in
             settingsController?.show()
         }
+        statusController.shelfItemsProvider = { [weak layoutModel] in
+            (
+                regular: layoutModel?.items(in: .hidden) ?? [],
+                permanent: layoutModel?.items(in: .permanent) ?? []
+            )
+        }
 
         statusBarController = statusController
         settingsWindowController = settingsController
+
+        // Build the complete off-screen inventory shortly after launch. This
+        // does not expand either hidden section and also makes the compact
+        // always-hidden bar available without opening Settings first.
+        layoutModel.refresh(after: 1.2)
 
         if Preferences.hasCompletedOnboarding {
             statusController.collapseAfterLaunch()
         } else {
             showOnboarding()
         }
+
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -52,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Preferences.hasCompletedOnboarding = true
 
         if response == .alertFirstButtonReturn {
-            statusBarController.beginArrangeMode()
+            settingsWindowController?.show()
         } else {
             statusBarController.collapseAfterLaunch()
         }

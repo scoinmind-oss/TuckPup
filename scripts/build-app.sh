@@ -38,13 +38,36 @@ sips -z 1024 1024 "$icon_source" --out "$iconset_dir/icon_512x512@2x.png" >/dev/
 iconutil -c icns "$iconset_dir" -o "$resources_dir/AppIcon.icns"
 
 xattr -cr "$app_dir"
+
+# Privacy permissions on macOS are tied to the app's designated requirement.
+# An ad-hoc signature changes identity whenever the executable changes, which
+# makes Accessibility and Screen Recording prompt again after every build.
+signing_identity=${TUCKPUP_CODESIGN_IDENTITY:-}
+if [[ -z "$signing_identity" ]]; then
+    identity_list=$(security find-identity -v -p codesigning 2>/dev/null || true)
+    signing_identity=$(printf '%s\n' "$identity_list" | awk -F '"' '
+        /Developer ID Application:|Apple Development:|Mac Developer:/ {
+            print $2
+            exit
+        }
+    ')
+fi
+
+if [[ -z "$signing_identity" ]]; then
+    print -u2 "TuckPup needs a persistent code-signing identity."
+    print -u2 "In Xcode: Settings > Accounts > Manage Certificates > + > Apple Development."
+    print -u2 "Create it once, then run this build again. Ad-hoc signing is intentionally disabled."
+    exit 1
+fi
+
 codesign \
     --force \
     --deep \
-    --sign - \
+    --sign "$signing_identity" \
     --entitlements "$project_dir/TuckPup.entitlements" \
     "$app_dir"
 xattr -cr "$app_dir"
 codesign --verify --deep --strict "$app_dir"
 
+echo "Signed with: $signing_identity"
 echo "$app_dir"

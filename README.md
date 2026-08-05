@@ -25,12 +25,16 @@ again.
 
 - Show or hide your chosen menu bar icons with one click.
 - Keep important icons permanently visible.
+- Put rarely used icons in an always-hidden section and open them in a compact,
+  horizontally scrollable bar.
+- Scroll up or down over the Bichon to show or hide normally hidden icons.
 - Rehide icons automatically after a configurable delay.
 - Launch automatically when you sign in to your Mac.
 - Follow the macOS language automatically, or choose English, Simplified
   Chinese, or Japanese in Settings.
 - Native AppKit app with no account, analytics, ads, or network access.
-- No Accessibility or Screen Recording permission required.
+- Accessibility and Screen Recording are requested only when using the
+  always-hidden icon bar.
 
 ### Requirements
 
@@ -79,9 +83,9 @@ The app will be created at `dist/TuckPup.app`.
 
 ### Privacy
 
-TuckPup runs inside the App Sandbox. It does not connect to the internet, read
-your files, collect analytics, or require Accessibility or Screen Recording
-permission.
+TuckPup does not connect to the internet, read your files, or collect analytics.
+The optional always-hidden icon bar uses Accessibility to temporarily move and
+click an original menu bar item, and Screen Recording to render its real icon.
 
 ### How it works
 
@@ -104,12 +108,14 @@ TuckPup 是一款由小比熊守着的原生 macOS 菜单栏收纳工具。你�
 
 - 单击即可展开或收起选中的菜单栏图标。
 - 重要图标可以始终保持显示。
+- 不常用图标可以放入“永久隐藏”区，需要时在菜单栏下方的紧凑横向栏中打开。
+- 在比熊头像上向上或向下滚动，可展开或收起普通隐藏图标。
 - 支持按设定时间自动收起。
 - 支持登录 Mac 时自动启动。
 - 支持自动跟随 macOS 系统语言，也可在设置中手动选择 English、简体中文或
   日本語。
 - 原生 AppKit 应用，无账户、无广告、无统计、无网络访问。
-- 不需要辅助功能或屏幕录制权限。
+- 只有使用“永久隐藏”图标栏时才会请求辅助功能和屏幕录制权限。
 
 ### 系统要求
 
@@ -155,8 +161,8 @@ chmod +x scripts/build-app.sh
 
 ### 隐私
 
-TuckPup 启用 App Sandbox，不联网、不读取用户文件、不收集数据，也不需要辅助
-功能或屏幕录制权限。
+TuckPup 不联网、不读取用户文件、不收集数据。“永久隐藏”图标栏会使用辅助功能
+权限临时移动并点击原生菜单栏图标，并使用屏幕录制权限显示图标的真实外观。
 
 ### 实现说明
 

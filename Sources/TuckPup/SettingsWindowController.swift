@@ -1,21 +1,20 @@
 import AppKit
 import ServiceManagement
+import SwiftUI
 
 @MainActor
-final class SettingsWindowController: NSWindowController {
-    private let onBeginArrange: () -> Void
+final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+    private let layoutModel: MenuBarLayoutModel
+    private let onPrepareLayoutEditing: () -> Void
+    private let onFinishLayoutEditing: () -> Void
     private let onPreferencesChanged: () -> Void
 
-    private let titleLabel = NSTextField(labelWithString: "TuckPup")
-    private let subtitleLabel = NSTextField(wrappingLabelWithString: "")
-    private let instructionsLabel = NSTextField(wrappingLabelWithString: "")
-    private let arrangeButton = NSButton(title: "", target: nil, action: nil)
+    private let layoutHostingView: NSHostingView<MenuBarLayoutEditorView>
     private let autoCollapseCheckbox = NSButton(
         checkboxWithTitle: "",
         target: nil,
         action: nil
     )
-    private let delayLabel = NSTextField(labelWithString: "")
     private let delayPopup = NSPopUpButton()
     private let launchAtLoginCheckbox = NSButton(
         checkboxWithTitle: "",
@@ -24,25 +23,39 @@ final class SettingsWindowController: NSWindowController {
     )
     private let languageLabel = NSTextField(labelWithString: "")
     private let languagePopup = NSPopUpButton()
-    private let shortcutLabel = NSTextField(wrappingLabelWithString: "")
 
     init(
-        onBeginArrange: @escaping () -> Void,
+        layoutModel: MenuBarLayoutModel,
+        onPrepareLayoutEditing: @escaping () -> Void,
+        onFinishLayoutEditing: @escaping () -> Void,
         onPreferencesChanged: @escaping () -> Void
     ) {
-        self.onBeginArrange = onBeginArrange
+        self.layoutModel = layoutModel
+        self.onPrepareLayoutEditing = onPrepareLayoutEditing
+        self.onFinishLayoutEditing = onFinishLayoutEditing
         self.onPreferencesChanged = onPreferencesChanged
+        self.layoutHostingView = NSHostingView(
+            rootView: MenuBarLayoutEditorView(model: layoutModel)
+        )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 450),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 840, height: 430),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 760, height: 410)
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        // The layout editor needs to receive drag gestures anywhere in its
+        // content. Only the actual title bar should move the settings window.
+        window.isMovableByWindowBackground = false
+        window.backgroundColor = .clear
         window.center()
 
         super.init(window: window)
+        window.delegate = self
         configureContent()
         applyLocalization()
         refreshControls()
@@ -54,8 +67,10 @@ final class SettingsWindowController: NSWindowController {
     }
 
     func show() {
+        onPrepareLayoutEditing()
         applyLocalization()
         refreshControls()
+        layoutModel.refresh(after: 0.3)
         window?.center()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -64,32 +79,39 @@ final class SettingsWindowController: NSWindowController {
     private func configureContent() {
         guard let contentView = window?.contentView else { return }
 
-        titleLabel.font = .systemFont(ofSize: 26, weight: .bold)
+        let backgroundView = NSVisualEffectView(frame: contentView.bounds)
+        backgroundView.material = .underWindowBackground
+        backgroundView.blendingMode = .behindWindow
+        backgroundView.state = .active
+        backgroundView.autoresizingMask = [.width, .height]
+        contentView.addSubview(backgroundView)
 
-        subtitleLabel.textColor = .secondaryLabelColor
-
-        instructionsLabel.maximumNumberOfLines = 0
-
-        arrangeButton.target = self
-        arrangeButton.action = #selector(beginArrange)
-        arrangeButton.bezelStyle = .rounded
+        // A restrained neutral wash keeps the desktop color from becoming too
+        // prominent while preserving one continuous material under the titlebar.
+        let backgroundTint = NSView(frame: contentView.bounds)
+        backgroundTint.wantsLayer = true
+        backgroundTint.layer?.backgroundColor = NSColor.windowBackgroundColor
+            .withAlphaComponent(0.58).cgColor
+        backgroundTint.autoresizingMask = [.width, .height]
+        contentView.addSubview(backgroundTint, positioned: .above, relativeTo: backgroundView)
 
         autoCollapseCheckbox.target = self
         autoCollapseCheckbox.action = #selector(autoCollapseChanged)
+        autoCollapseCheckbox.font = .systemFont(ofSize: 13)
 
         delayPopup.target = self
         delayPopup.action = #selector(delayChanged)
-
-        let delayRow = NSStackView(views: [delayLabel, delayPopup])
-        delayRow.orientation = .horizontal
-        delayRow.alignment = .centerY
-        delayRow.distribution = .fill
+        delayPopup.font = .systemFont(ofSize: 13)
+        delayPopup.setContentHuggingPriority(.required, for: .horizontal)
 
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(launchAtLoginChanged)
+        launchAtLoginCheckbox.font = .systemFont(ofSize: 13)
 
         languagePopup.target = self
         languagePopup.action = #selector(languageChanged)
+        languagePopup.font = .systemFont(ofSize: 13)
+        languageLabel.font = .systemFont(ofSize: 13)
         languagePopup.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         let languageRow = NSStackView(views: [languageLabel, languagePopup])
@@ -97,38 +119,66 @@ final class SettingsWindowController: NSWindowController {
         languageRow.alignment = .centerY
         languageRow.distribution = .fill
 
-        let divider = NSBox()
-        divider.boxType = .separator
+        let behaviorRow = NSStackView(views: [autoCollapseCheckbox, delayPopup])
+        behaviorRow.orientation = .horizontal
+        behaviorRow.alignment = .centerY
+        behaviorRow.spacing = 10
 
-        shortcutLabel.textColor = .secondaryLabelColor
-        shortcutLabel.font = .systemFont(ofSize: 12)
+        let firstSeparator = NSBox()
+        firstSeparator.boxType = .separator
+        let secondSeparator = NSBox()
+        secondSeparator.boxType = .separator
+
+        let preferencesStack = NSStackView(views: [
+            behaviorRow,
+            firstSeparator,
+            launchAtLoginCheckbox,
+            secondSeparator,
+            languageRow
+        ])
+        preferencesStack.orientation = .horizontal
+        preferencesStack.alignment = .centerY
+        preferencesStack.spacing = 16
+        preferencesStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let preferencesCard = NSView()
+        preferencesCard.wantsLayer = true
+        preferencesCard.layer?.backgroundColor = NSColor.controlBackgroundColor
+            .withAlphaComponent(0.46).cgColor
+        preferencesCard.layer?.cornerRadius = 13
+        preferencesCard.layer?.cornerCurve = .continuous
+        preferencesCard.layer?.borderWidth = 0.5
+        preferencesCard.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.28).cgColor
+        preferencesCard.addSubview(preferencesStack)
+        NSLayoutConstraint.activate([
+            preferencesStack.leadingAnchor.constraint(equalTo: preferencesCard.leadingAnchor, constant: 14),
+            preferencesStack.trailingAnchor.constraint(lessThanOrEqualTo: preferencesCard.trailingAnchor, constant: -14),
+            preferencesStack.centerYAnchor.constraint(equalTo: preferencesCard.centerYAnchor),
+            firstSeparator.heightAnchor.constraint(equalToConstant: 24),
+            secondSeparator.heightAnchor.constraint(equalToConstant: 24),
+            delayPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 86)
+        ])
 
         let stack = NSStackView(views: [
-            titleLabel,
-            subtitleLabel,
-            instructionsLabel,
-            arrangeButton,
-            divider,
-            autoCollapseCheckbox,
-            delayRow,
-            launchAtLoginCheckbox,
-            languageRow,
-            shortcutLabel
+            layoutHostingView,
+            preferencesCard
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 14
+        stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
 
-        contentView.addSubview(stack)
+        contentView.addSubview(stack, positioned: .above, relativeTo: backgroundTint)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 28),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -28),
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            delayRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            languageRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            languagePopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 180),
-            divider.widthAnchor.constraint(equalTo: stack.widthAnchor)
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            stack.topAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
+            layoutHostingView.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            layoutHostingView.heightAnchor.constraint(greaterThanOrEqualToConstant: 246),
+            preferencesCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            preferencesCard.heightAnchor.constraint(equalToConstant: 54),
+            languagePopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 142),
         ])
     }
 
@@ -136,14 +186,9 @@ final class SettingsWindowController: NSWindowController {
         let strings = Localization.strings
 
         window?.title = strings.settingsWindowTitle
-        subtitleLabel.stringValue = strings.settingsSubtitle
-        instructionsLabel.stringValue = strings.settingsInstructions
-        arrangeButton.title = strings.adjustHiddenRange
         autoCollapseCheckbox.title = strings.autoCollapse
-        delayLabel.stringValue = strings.autoCollapseDelay
         launchAtLoginCheckbox.title = strings.launchAtLogin
         languageLabel.stringValue = strings.language
-        shortcutLabel.stringValue = strings.shortcutHint
 
         delayPopup.removeAllItems()
         delayPopup.addItems(withTitles: [5, 10, 15, 30].map(Localization.seconds))
@@ -174,9 +219,8 @@ final class SettingsWindowController: NSWindowController {
         }
     }
 
-    @objc private func beginArrange() {
-        window?.orderOut(nil)
-        onBeginArrange()
+    func windowWillClose(_ notification: Notification) {
+        onFinishLayoutEditing()
     }
 
     @objc private func autoCollapseChanged() {
@@ -203,6 +247,7 @@ final class SettingsWindowController: NSWindowController {
         Preferences.appLanguage = language
         applyLocalization()
         refreshControls()
+        layoutModel.localizationDidChange()
         onPreferencesChanged()
     }
 
